@@ -1,0 +1,131 @@
+// MQTT 遥测：每 10 秒上报板子运行数据到 fall/telemetry/<device_id>
+#include <stdio.h>
+#include <string.h>
+#include <stdint.h>
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+#include "esp_log.h"
+#include "esp_system.h"
+#include "esp_wifi.h"
+#include "esp_timer.h"
+#include "mqtt_client.h"
+#include "cJSON.h"
+#include "telemetry.h"
+#include "ota.h"
+#include "board_config.h"
+
+static const char *TAG = "telemetry";
+static esp_mqtt_client_handle_t mqtt = NULL;
+extern const char *board_extra_json; // 业务扩展遥测字段（main.cpp 定义，形如 ,"led":1）
+extern "C" void board_led_set(int on); // main.cpp：MQTT 远程开关板载 LED
+extern "C" void board_led_set_color(uint8_t g, uint8_t r, uint8_t b); // main.cpp：MQTT 颜色常亮（如 led_green_on）
+static void mqtt_event(void *handler_args, esp_event_base_t base, int32_t event_id, void *event_data);
+static volatile bool mqtt_connected = false;
+
+static void telemetry_task(void *arg) {
+    vTaskDelay(pdMS_TO_TICKS(20000)); // 等 WiFi/网络栈就绪
+    if (mqtt == NULL) {
+        esp_mqtt_client_config_t cfg = {};
+        cfg.broker.address.uri = "mqtt://" BOARD_MQTT_HOST;
+        cfg.broker.address.port = BOARD_MQTT_PORT;
+        cfg.credentials.username = BOARD_MQTT_USER;
+        cfg.credentials.authentication.password = BOARD_MQTT_PASS;
+        mqtt = esp_mqtt_client_init(&cfg);
+        esp_mqtt_client_register_event(mqtt, (esp_mqtt_event_id_t)ESP_EVENT_ANY_ID, mqtt_event, NULL);
+        esp_mqtt_client_start(mqtt);
+    }
+    vTaskDelay(pdMS_TO_TICKS(15000)); // 等 MQTT 连接
+    for (;;) {
+        if (mqtt && mqtt_connected) {
+            cJSON *root = cJSON_CreateObject();
+            cJSON_AddStringToObject(root, "fw", BOARD_FW_VERSION);
+            cJSON_AddNumberToObject(root, "uptime_s", (double)(esp_timer_get_time() / 1000000));
+            extern char g_ota_err[80];
+            if (g_ota_err[0] != 0) {
+                cJSON_AddStringToObject(root, "ota_err", g_ota_err);
+            }
+            cJSON_AddNumberToObject(root, "free_heap", (double)esp_get_free_heap_size());
+            wifi_ap_record_t ap;
+            if (esp_wifi_sta_get_ap_info(&ap) == ESP_OK) {
+                cJSON_AddNumberToObject(root, "rssi", ap.rssi);
+            }
+            cJSON_AddNumberToObject(root, "restart_reason", esp_reset_reason());
+            char *base = cJSON_PrintUnformatted(root);
+            char *s = NULL;
+            if (base) {
+                int blen = strlen(base);
+                const char *extra = board_extra_json ? board_extra_json : "";
+                s = (char *)malloc(blen + strlen(extra) + 2);
+                if (s) {
+                    // 在 JSON 末尾 "}" 前插入扩展字段
+                    if (blen > 0 && base[blen-1] == '}') {
+                        snprintf(s, blen + strlen(extra) + 2, "%.*s%s}", blen-1, base, extra);
+                    } else {
+                        snprintf(s, blen + strlen(extra) + 2, "%s%s", base, extra);
+                    }
+                }
+                free(base);
+            }
+            if (s) {
+                esp_mqtt_client_publish(mqtt, BOARD_TELEMETRY_TOPIC, s, 0, 0, 0);
+                free(s);
+            }
+            cJSON_Delete(root);
+        }
+        vTaskDelay(pdMS_TO_TICKS(10 * 1000));
+    }
+}
+
+static void mqtt_event(void *handler_args, esp_event_base_t base, int32_t event_id, void *event_data) {
+    esp_mqtt_event_handle_t ev = (esp_mqtt_event_handle_t)event_data;
+    switch ((esp_mqtt_event_id_t)event_id) {
+    case MQTT_EVENT_CONNECTED: {
+        mqtt_connected = true;
+        ESP_LOGI(TAG, "MQTT 已连接，遥测主题 %s", BOARD_TELEMETRY_TOPIC);
+        char cmd_topic[128];
+        snprintf(cmd_topic, sizeof(cmd_topic), "fall/commands/%s", BOARD_DEVICE_ID);
+        int sub = esp_mqtt_client_subscribe(mqtt, cmd_topic, 0);
+        ESP_LOGI(TAG, "订阅命令主题 %s (rc=%d)", cmd_topic, sub);
+        break;
+    }
+    case MQTT_EVENT_DISCONNECTED:
+        mqtt_connected = false;
+        ESP_LOGW(TAG, "MQTT 断开，重连中...");
+        break;
+    case MQTT_EVENT_DATA: {
+        if (ev && ev->topic_len && ev->data_len) {
+            char topic[128] = {0};
+            char data[64] = {0};
+            int tl = ev->topic_len < 127 ? ev->topic_len : 127;
+            int dl = ev->data_len < 63 ? ev->data_len : 63;
+            memcpy(topic, ev->topic, tl);
+            memcpy(data, ev->data, dl);
+            ESP_LOGI(TAG, "收到命令 %s: %s", topic, data);
+            if (strncmp(data, "ota_check", 9) == 0) {
+                ESP_LOGI(TAG, "触发 OTA 检查");
+                ota_check_now();
+            } else if (strcmp(data, "led_on") == 0) {
+                ESP_LOGI(TAG, "收到 LED 开指令");
+                board_led_set(1);
+            } else if (strcmp(data, "led_off") == 0) {
+                ESP_LOGI(TAG, "收到 LED 关指令");
+                board_led_set(0);
+            } else if (strcmp(data, "led_green_on") == 0) {
+                ESP_LOGI(TAG, "收到 LED 绿色常亮指令");
+                board_led_set_color(255, 0, 0);  /* (G,R,B)：绿色满亮度常亮，不呼吸不自动关灯 */
+            }
+        }
+        break;
+    }
+    case MQTT_EVENT_ERROR:
+        ESP_LOGE(TAG, "MQTT 错误");
+        break;
+    default:
+        break;
+    }
+}
+
+void telemetry_init(void) {
+    // 网络栈就绪后才启动 MQTT（app_main 开头调用时 WiFi 尚未初始化，立即 start 会触发 lwip assert）
+    xTaskCreate(telemetry_task, "telemetry_task", 4096, NULL, 4, NULL);
+}

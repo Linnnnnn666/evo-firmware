@@ -1,0 +1,111 @@
+// 通用引导固件业务模板：LED 指示 + 业务遥测字段（board_extra_json）
+#include <stdio.h>
+#include <string.h>
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+#include "driver/gpio.h"
+#include "esp_log.h"
+#include "board_config.h"
+#include "network.h"
+#include "ota.h"
+#include "telemetry.h"
+
+#ifdef BOARD_LED_WS2812
+// 板载 RGB LED（WS2812 可寻址灯珠）：上电后常亮蓝色
+#include "driver/rmt_tx.h"
+
+#define WS2812_RMT_RESOLUTION_HZ 10000000  /* 10 MHz：1 tick = 0.1 us */
+#define WS2812_T0H_TICKS  3                /* 0 码：0.3 us 高 + 0.9 us 低 */
+#define WS2812_T0L_TICKS  9
+#define WS2812_T1H_TICKS  9                /* 1 码：0.9 us 高 + 0.3 us 低 */
+#define WS2812_T1L_TICKS  3
+#define WS2812_RESET_TICKS 600             /* 帧尾复位：60 us 低电平（>50 us 触发锁存） */
+
+static rmt_channel_handle_t s_led_chan = NULL;
+static rmt_encoder_handle_t s_led_encoder = NULL;
+
+static void ws2812_fill_symbol(rmt_symbol_word_t *sym, uint16_t high_ticks, uint16_t low_ticks) {
+    sym->duration0 = high_ticks;
+    sym->level0 = 1;
+    sym->duration1 = low_ticks;
+    sym->level1 = 0;
+}
+
+// 单颗灯珠常亮蓝色（GRB 顺序，MSB 先发）；static 缓冲保证 RMT 异步拷贝安全
+static void ws2812_set_solid_blue(void) {
+    const uint32_t grb = (0u << 16) | (0u << 8) | 255u;  /* G=0, R=0, B=255 */
+    static rmt_symbol_word_t syms[24 + 1];
+    for (int i = 23; i >= 0; i--) {
+        if (grb & (1u << i))
+            ws2812_fill_symbol(&syms[23 - i], WS2812_T1H_TICKS, WS2812_T1L_TICKS);
+        else
+            ws2812_fill_symbol(&syms[23 - i], WS2812_T0H_TICKS, WS2812_T0L_TICKS);
+    }
+    syms[24].duration0 = WS2812_RESET_TICKS;
+    syms[24].level0 = 0;
+    syms[24].duration1 = 0;
+    syms[24].level1 = 0;
+    rmt_transmit(s_led_chan, s_led_encoder, syms, sizeof(syms), NULL);
+}
+
+static void ws2812_init(void) {
+    rmt_tx_channel_config_t tx_cfg = {};
+    tx_cfg.gpio_num = (gpio_num_t)BOARD_LED_GPIO;
+    tx_cfg.clk_src = RMT_CLK_SRC_DEFAULT;
+    tx_cfg.resolution_hz = WS2812_RMT_RESOLUTION_HZ;
+    tx_cfg.mem_block_symbols = 64;
+    tx_cfg.trans_queue_depth = 1;
+    ESP_ERROR_CHECK(rmt_new_tx_channel(&tx_cfg, &s_led_chan));
+
+    rmt_copy_encoder_config_t enc_cfg = {};
+    ESP_ERROR_CHECK(rmt_new_copy_encoder(&enc_cfg, &s_led_encoder));
+
+    ESP_ERROR_CHECK(rmt_enable(s_led_chan));
+    ws2812_set_solid_blue();
+}
+#endif
+
+static const char *TAG = "board";
+
+// 业务扩展遥测字段（拼进 MQTT JSON：,"led":1）
+const char *board_extra_json = "";
+
+static void led_task(void *arg) {
+#ifdef BOARD_LED_WS2812
+    // 板载 RGB LED（WS2812）：上电后常亮蓝色
+    ws2812_init();
+    board_extra_json = ",\"led\":1";
+    for (;;) {
+        vTaskDelay(pdMS_TO_TICKS(1000));
+    }
+#else
+    gpio_config_t io = {
+        .pin_bit_mask = (1ULL << BOARD_LED_GPIO),
+        .mode = GPIO_MODE_OUTPUT,
+    };
+    gpio_config(&io);
+    // 启动就绪提示：闪烁 3 次（每次亮 200ms / 灭 200ms）
+    for (int i = 0; i < 3; i++) {
+        gpio_set_level((gpio_num_t)BOARD_LED_GPIO, 1);
+        vTaskDelay(pdMS_TO_TICKS(200));
+        gpio_set_level((gpio_num_t)BOARD_LED_GPIO, 0);
+        vTaskDelay(pdMS_TO_TICKS(200));
+    }
+    int state = 0;
+    for (;;) {
+        state = !state;
+        gpio_set_level((gpio_num_t)BOARD_LED_GPIO, state);
+        board_extra_json = state ? ",\"led\":1" : ",\"led\":0";
+        vTaskDelay(pdMS_TO_TICKS(1000));
+    }
+#endif
+}
+
+extern "C" void app_main() {
+    ESP_LOGI(TAG, "board %s (%s) starting, fw %s", BOARD_DEVICE_ID, BOARD_MODEL, BOARD_FW_VERSION);
+    network_init();
+    ota_init();
+    telemetry_init();
+    xTaskCreate(led_task, "led_task", 2048, NULL, 4, NULL);
+    ESP_LOGI(TAG, "board %s ready", BOARD_DEVICE_ID);
+}
