@@ -1,0 +1,91 @@
+/*
+ * SPDX-FileCopyrightText: 2026 Espressif Systems (Shanghai) CO LTD
+ *
+ * SPDX-License-Identifier: Unlicense OR CC0-1.0
+ */
+/* Example of loading the program into RAM
+
+   This example code is in the Public Domain (or CC0 licensed, at your option.)
+
+   Unless required by applicable law or agreed to in writing, this
+   software is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR
+   CONDITIONS OF ANY KIND, either express or implied.
+*/
+
+#include <sys/param.h>
+#include <string.h>
+#include "esp_err.h"
+#include "esp_log.h"
+#include "esp_task_wdt.h"
+#include "driver/uart.h"
+#include "driver/gpio.h"
+#include "esp32_port.h"
+#include "esp_loader.h"
+#include "example_common.h"
+#include "freertos/FreeRTOS.h"
+
+// Embedded RAM binary files using bin2array.cmake
+extern const uint8_t app_bin[];
+extern const uint32_t app_bin_size;
+extern const uint8_t app_bin_md5[];
+
+static const char *TAG = "serial_ram_loader";
+
+// This can be set to a higher baud rate, but because it takes some time to
+// switch the uart baud rate in slave_monitor task, the log at slave startup
+// time will be lost or garbled.
+#define HIGHER_BAUDRATE 115200
+
+// Max line size
+#define BUF_LEN 128
+static uint8_t buf[BUF_LEN] = {0};
+
+void slave_monitor(void *arg)
+{
+#if (HIGHER_BAUDRATE != 115200)
+    uart_flush_input(UART_NUM_1);
+    uart_flush(UART_NUM_1);
+    uart_set_baudrate(UART_NUM_1, 115200);
+#endif
+    while (1) {
+        int rxBytes = uart_read_bytes(UART_NUM_1, buf, BUF_LEN, 100 / portTICK_PERIOD_MS);
+        buf[rxBytes] = '\0';
+        printf("%s", buf);
+    }
+}
+
+void app_main(void)
+{
+    esp_loader_t loader;
+
+    esp32_port_t port = {
+        .port.ops          = &esp32_uart_ops,
+        .baud_rate         = 115200,
+        .uart_port         = UART_NUM_1,
+        .uart_rx_pin       = GPIO_NUM_5,
+        .uart_tx_pin       = GPIO_NUM_4,
+        .reset_pin         = GPIO_NUM_25,
+        .boot_pin          = GPIO_NUM_26,
+    };
+
+    if (esp_loader_init_serial(&loader, &port.port) != ESP_LOADER_SUCCESS) {
+        ESP_LOGE(TAG, "serial initialization failed.");
+        abort();
+    }
+
+    if (connect_to_target(&loader, HIGHER_BAUDRATE) == ESP_LOADER_SUCCESS) {
+
+        ESP_LOGI(TAG, "Loading app to RAM ...");
+        esp_loader_error_t err = load_ram_binary(&loader, app_bin);
+        if (err == ESP_LOADER_SUCCESS) {
+            // Forward slave's serial output
+            ESP_LOGI(TAG, "********************************************");
+            ESP_LOGI(TAG, "*** Logs below are print from slave .... ***");
+            ESP_LOGI(TAG, "********************************************");
+            xTaskCreate(slave_monitor, "slave_monitor", 2048, NULL, configMAX_PRIORITIES - 1, NULL);
+        } else {
+            ESP_LOGE(TAG, "Loading to ram failed ...");
+        }
+    }
+    vTaskDelete(NULL);
+}

@@ -1,0 +1,24 @@
+name: Stub sources correctness checks
+
+on:
+  push:
+    branches: [ "master" ]
+  pull_request:
+    branches: [ "master" ]
+
+jobs:
+  pre_commit:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Regenerate stub sources
+        run: |
+          python3 cmake/gen_stub_sources.py \
+            '1.2.1' \
+            'https://github.com/espressif/esp-flasher-stub/releases/download' \
+            .
+
+      - name: Run git diff to check if the sources in the repo match the generated ones
+        run: git diff -I 'SPDX-FileCopyrightText' --exit-code  # ignore annual copyright year updates

@@ -1,0 +1,116 @@
+# Flashing Multiple Partitions While Using the Flasher Stub Example
+
+## Overview
+
+This example demonstrates how to flash an Espressif SoC from another Espressif SoC using `esp-serial-flasher` and the flasher stub. Binaries to be flashed from the host to the Espressif SoC can be found in the `binaries` folder and are converted into C arrays during build process.
+
+The following steps are performed in order to re-program the target's memory:
+
+1. UART1 through which the new binary will be transferred is initialized.
+2. The host puts the slave device into boot mode and tries to connect and then upload the flasher stub by calling `esp_loader_connect_with_stub()`.
+3. `esp_loader_flash_start()` is called to enter flashing mode and erase amount of memory to be flashed.
+4. `esp_loader_flash_write()` function is called repeatedly until the whole binary image is transferred.
+
+## Hardware Required
+
+- Two development boards with Espressif SoCs (e.g., ESP32-DevKitC, ESP-WROVER-KIT, etc.).
+- One or two USB cables for power supply and programming.
+- Jumper cables to connect host to target according to table below.
+
+## Hardware Connection
+
+This example uses the **UART interface**. For detailed interface information and general hardware considerations, see the [Hardware Connections Guide](../../docs/hardware-connections.md#uartserial-interface).
+
+**ESP32-to-Espressif SoC Pin Assignment:**
+
+| ESP32 (host) | Espressif SoC (target) |
+| :----------: | :--------------------: |
+|     IO26     |          BOOT          |
+|     IO25     |         RESET          |
+|     IO4      |          RX0           |
+|     IO5      |          TX0           |
+
+## Prepare Target Firmware
+
+Place the required target firmware binaries in the `target-firmware/` directory. You can use your own binaries, build them from the esp-idf examples, or build them from the source in the `test/target-example-src` directory.
+
+**Required binaries:**
+
+- `bootloader.bin` - ESP bootloader binary
+- `partition-table.bin` - Partition table configuration
+- `app.bin` - Main application binary
+
+## Building and Flashing
+
+To run the example, type the following command:
+
+```CMake
+idf.py -p PORT flash monitor
+```
+
+(To exit the serial monitor, type `Ctrl-]`.)
+
+See the Getting Started Guide for full steps to configure and use ESP-IDF to build projects.
+
+## Configuration
+
+For details about available configuration options, please refer to top level [README.md](../../README.md).
+Binaries to be flashed are placed in a separate folder (binaries.c) for each possible target and converted to C-array.
+
+## Pulling Newer Stub Binaries
+
+The stub binaries are embedded into the per-chip source files under `src/stubs/` from a fixed release of [esp-flasher-stub](https://github.com/espressif/esp-flasher-stub).
+
+If a new [esp-flasher-stub](https://github.com/espressif/esp-flasher-stub) version is available, you can obtain binaries by passing a CMake cache variable to `idf.py` like so:
+
+```bash
+idf.py -DSERIAL_FLASHER_STUB_PULL_VERSION=<version> build
+```
+
+Additionally, it is possible to override the stub sources by either providing a custom url:
+
+```bash
+idf.py -DSERIAL_FLASHER_STUB_PULL_SOURCE=<source_url> -DSERIAL_FLASHER_STUB_PULL_VERSION=<version> build
+```
+
+where the following schema is required: `<stub_download_url>/v<stub_version>/esp32xx.json`,
+or a custom local folder:
+
+```bash
+idf.py -DSERIAL_FLASHER_STUB_PULL_OVERRIDE_PATH=<local_folder_path> build
+```
+
+containing stub `.json` files.
+
+> [!NOTE]
+> If overriding with custom stub sources, please check that the license under which the they are released fits your usecase.
+
+## Example Output
+
+Here is the example's console output:
+
+```text
+...
+I (541) main_task: Calling app_main()
+Connected to target
+I (1121) serial_stub_flasher: Loading bootloader...
+Erasing flash (this may take a while)...
+Start programming
+Progress: 100 %
+Finished programming
+I (1681) serial_stub_flasher: Loading partition table...
+Erasing flash (this may take a while)...
+Start programming
+Progress: 100 %
+Finished programming
+I (1771) serial_stub_flasher: Loading app...
+Erasing flash (this may take a while)...
+Start programming
+Progress: 100 %
+Finished programming
+I (5011) serial_stub_flasher: Done!
+I (5095) serial_stub_flasher: ********************************************
+I (5095) serial_stub_flasher: *** Logs below are print from slave .... ***
+I (5096) serial_stub_flasher: ********************************************
+Hello world!
+```

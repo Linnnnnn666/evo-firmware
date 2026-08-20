@@ -1,0 +1,2 @@
+dependencies:
+  espressif/esp-serial-flasher: "^1.0.0"
