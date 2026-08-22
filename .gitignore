@@ -1,0 +1,24 @@
+# Build artifacts
+build/
+build-*/
+sdkconfig
+sdkconfig.old
+sdkconfig.defaults.*
+*.bin
+*.elf
+*.map
+*.o
+*.a
+
+# ESP-IDF managed components (downloaded)
+managed_components/
+
+# IDE / OS
+.vscode/
+.idea/
+*.swp
+.DS_Store
+
+# Private board configs (real credentials live here locally)
+main/boards/*.local.h
+main/*_private.h
