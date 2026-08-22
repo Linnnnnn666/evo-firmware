@@ -1,0 +1,18 @@
+/*
+ * 设备私有配置模板 —— 复制为 main/device_config_private.h 并填写真实值。
+ * device_config_private.h 已加入 .gitignore，禁止提交。
+ */
+#pragma once
+
+/* Wi-Fi */
+#define DEVICE_WIFI_SSID       "YOUR_WIFI_SSID"
+#define DEVICE_WIFI_PASSWORD   "YOUR_WIFI_PASSWORD"
+
+/* 自有服务器（无域名阶段用公网 IP；正式 OTA 前必须换成 HTTPS 域名） */
+#define DEVICE_API_BASE_URL    "http://YOUR_SERVER_HOST"
+
+/* 设备 token：服务器上 python -m app.cli create-device <id> 生成，只打印一次 */
+#define DEVICE_TOKEN           "REPLACE_WITH_DEVICE_TOKEN"
+
+/* 设备 ID（应支持 NVS 覆盖，第一阶段先用宏） */
+#define DEVICE_ID              "esp32s3-cam-01"
