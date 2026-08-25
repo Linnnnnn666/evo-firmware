@@ -113,6 +113,9 @@ DSH 改完固件代码 → dev_ota_deploy 编译归档 app.bin
 
 ## 快速开始
 
+> 分层入口：**[0 层 · 先看效果](https://github.com/Linnnnnn666/evo-fall-mcp)**（系统架构图）· **[1 层 · 纯软件 5 分钟](https://github.com/Linnnnnn666/evo-fall-mcp#快速开始)**（能力中枢，无需硬件）·
+> **[2 层 · 单板体验](#快速开始)**（本仓库：一块 ESP32-S3 跑起来）· **[3 层 · 完整系统](https://github.com/Linnnnnn666/evo-fall-mcp/blob/main/docs/QUICK_START.md)**（服务器+中枢+固件+语音板全链路）
+
 ### 环境
 
 - ESP-IDF v5.5.4（`export IDF_TOOLS_PATH=/opt/esp && . /opt/esp-idf/export.sh`）
