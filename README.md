@@ -2,6 +2,8 @@
 
 > **一句话**：用语音或文字指挥 AI 智能体，为 ESP32 板卡完成「写固件 → 编译 → OTA 部署 → 遥测验收 → 经验沉淀」的完整开发闭环——**核心链路已验证、架构完整、持续迭代中的系统原型**，双层自进化，人在环兜底。
 
+> **English abstract**: EvoAgent firmware collection for ESP32-S3 boards — an **AI-driven hardware development loop** in which an LLM agent writes firmware, builds it, deploys it via **dual-partition OTA**, and validates it through **telemetry self-checks** with a human-in-the-loop gate. Boards: fall-detection (on-device AI + radar), cloud-programming board, and a configurable template firmware. Built on **ESP-IDF / esp32 / embedded C++**, MIT licensed. Part of the self-evolving EvoAgent system — see [evo-fall-mcp](https://github.com/Linnnnnn666/evo-fall-mcp) (capability hub) and [evo-voice-terminal](https://github.com/Linnnnnn666/evo-voice-terminal) (voice entry).
+
 ```
                               ┌──────────────┐
                               │     用户     │
