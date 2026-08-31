@@ -8,7 +8,7 @@
                               ┌──────────────┐
                               │     用户     │
                               └──────┬───────┘
-                语音「你好小安」        │       文字（DSH 会话）
+                语音「你好小智」        │       文字（DSH 会话）
                      │               │              │
                      ▼               ▼              ▼
         ┌──────────────────┐  ┌────────────────────────────┐
@@ -81,7 +81,7 @@ DSH-1 干活 → 复盘① 固化工具/模板（手变强）/ 复盘② 发现�
 |------|------|--------|
 | **[evo-firmware](https://github.com/Linnnnnn666/evo-firmware)** | 硬件端 | ESP32-S3 固件集合：跌倒检测板（端侧 AI）、云端烧录板、配置化引导固件 |
 | **[evo-fall-mcp](https://github.com/Linnnnnn666/evo-fall-mcp)** | 能力中枢 | MCP 服务器（47 工具）：部署/烧录/播报/自验收/自进化，连接 AI 与硬件 |
-| **[evo-voice-terminal](https://github.com/Linnnnnn666/evo-voice-terminal)** | 语音入口 | 语音板板卡包：唤醒「你好小安」→ 语音对话 → TTS 播报 |
+| **[evo-voice-terminal](https://github.com/Linnnnnn666/evo-voice-terminal)** | 语音入口 | 语音板板卡包：唤醒「你好小智」→ 语音对话 → TTS 播报 |
 
 **本仓库是其中的「硬件端」**——所有被 AI 指挥、被系统验收的 ESP32-S3 板卡固件都在这里。每块板都有遥测、OTA、可观测性设计，让"AI 写固件 → 系统验收"的闭环成为可能。
 
