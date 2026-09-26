@@ -143,6 +143,12 @@ idf.py set-target esp32s3
 idf.py build          # 或 bash build_board.sh my-board（多板并行编译）
 ```
 
+> **fall-board 的构建配置已固化**：`fall-board/sdkconfig.defaults.esp32s3` 把该板卡
+> 能跑起来的关键项写进版本库（目标芯片 esp32s3、16MB flash、双分区自定义分区表、
+> PSRAM OCT @40MHz、IDLE 栈 4096），避免重新生成 sdkconfig 时踩同样的坑——
+> 例如缺少 esp32s3 目标时 IDF 会按默认的 esp32 编译，而代码里用了 `GPIO42` 等
+> S3 独有引脚，会直接编译失败。
+
 ### 3. 烧录（首次 USB）
 
 ```bash

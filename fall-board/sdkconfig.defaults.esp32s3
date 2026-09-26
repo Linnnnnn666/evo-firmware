@@ -1,0 +1,36 @@
+# fall-board 构建默认配置（ESP32-S3 N16R8）
+#
+# 用法：
+#   idf.py set-target esp32s3     # 或直接依赖本文件里的 CONFIG_IDF_TARGET_ESP32S3
+#   idf.py build
+#
+# 说明：本文件把该板卡"能跑起来"的关键配置固化下来，避免每次重新生成
+# sdkconfig 时踩同样的坑（以下每项都对应一次真实排障）：
+#
+#   1) 目标芯片必须是 esp32s3 —— 缺失时 IDF 默认按 esp32 编译，而代码里用了
+#      GPIO42 等 S3 独有引脚，会直接报 'GPIO_NUM_42' was not declared
+#   2) FLASHSIZE 符号名是 **FLASHSIZE 连写**（不是 FLASH_SIZE），写错会被静默忽略
+#   3) 双分区 OTA 需要自定义分区表（partitions.csv：ota_0 / ota_1 / storage）
+#   4) 本板为 OCT 内置 PSRAM，QUAD 模式会启动失败（"PSRAM chip is not connected"）；
+#      80MHz 偶发随机崩溃，40MHz 稳定
+#   5) 保守 flash 模式 DIO，兼容劣质 flash
+
+# ---- 目标芯片 ----
+CONFIG_IDF_TARGET="esp32s3"
+CONFIG_IDF_TARGET_ESP32S3=y
+
+# ---- Flash：16MB / DIO ----
+CONFIG_ESPTOOLPY_FLASHSIZE_16MB=y
+CONFIG_ESPTOOLPY_FLASHMODE_DIO=y
+
+# ---- 分区表：自定义（双 OTA + storage）----
+CONFIG_PARTITION_TABLE_CUSTOM=y
+CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions.csv"
+
+# ---- PSRAM：OCT 模式 @ 40MHz ----
+CONFIG_SPIRAM=y
+CONFIG_SPIRAM_MODE_OCT=y
+CONFIG_SPIRAM_SPEED_40M=y
+
+# ---- FreeRTOS：IDLE 任务栈（注意配置名带下划线）----
+CONFIG_FREERTOS_IDLE_TASK_STACKSIZE=4096

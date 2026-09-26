@@ -4,6 +4,9 @@ build-*/
 sdkconfig
 sdkconfig.old
 sdkconfig.defaults.*
+# 例外：fall-board 的板级构建配置（纯硬件参数，无凭据）——
+# 缺它会导致 IDF 按默认 esp32 目标编译而失败，故纳入版本库
+!fall-board/sdkconfig.defaults.esp32s3
 *.bin
 *.elf
 *.map
